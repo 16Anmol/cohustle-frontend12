@@ -4,76 +4,68 @@ import styles from './VideoTile.module.css';
 export default function VideoTile({
   stream, name, muted = false,
   audioOn = true, videoOn = true,
-  isLocal = false, handRaised = false, small = false
+  isLocal = false, handRaised = false,
 }) {
-  const videoRef = useRef(null);
+  const videoRef  = useRef(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (stream) {
-      // Always set srcObject fresh
-      video.srcObject = stream;
-      const tryPlay = () => {
-        video.play()
-          .then(() => setPlaying(true))
-          .catch(err => {
-            // Autoplay blocked - try muted first then unmute
-            if (!video.muted) {
-              video.muted = true;
-              video.play().then(() => {
-                setPlaying(true);
-                if (!isLocal) {
-                  // Try to unmute after a short delay
-                  setTimeout(() => { video.muted = false; }, 500);
-                }
-              }).catch(e => console.warn('[VideoTile] play failed:', e));
-            }
-          });
-      };
-      // Small delay to let stream stabilize
-      const timer = setTimeout(tryPlay, 100);
-      return () => clearTimeout(timer);
-    } else {
+    if (!stream) {
       video.srcObject = null;
       setPlaying(false);
+      return;
     }
-  }, [stream, isLocal]);
 
-  // Re-play when tracks are added
+    // Always assign fresh — don't diff, just set
+    video.srcObject = stream;
+    video.muted = muted || isLocal; // local + muted props control muting, NOT autoplay hack
+
+    video.play().then(() => setPlaying(true)).catch(() => {
+      // Autoplay policy: must be muted to autoplay. For remote peers this
+      // is a browser restriction — we handle it by starting muted then
+      // unlocking audio on first user gesture.
+      video.muted = true;
+      video.play()
+        .then(() => {
+          setPlaying(true);
+          // For remote peers: unmute immediately after play starts.
+          // This works because the user already interacted (clicked "Join").
+          if (!isLocal && !muted) {
+            video.muted = false;
+          }
+        })
+        .catch(e => console.warn('[VideoTile] play failed:', e));
+    });
+  }, [stream]); // re-run whenever stream reference changes
+
+  // Sync muted prop changes (e.g. user mutes/unmutes)
   useEffect(() => {
-    if (!stream || !videoRef.current) return;
-    const onAddTrack = () => {
-      videoRef.current.srcObject = new MediaStream(stream.getTracks());
-      videoRef.current.play().catch(() => {});
-    };
-    stream.addEventListener('addtrack', onAddTrack);
-    return () => stream.removeEventListener('addtrack', onAddTrack);
-  }, [stream]);
+    if (videoRef.current) {
+      videoRef.current.muted = muted || isLocal;
+    }
+  }, [muted, isLocal]);
 
-  const hasVideoTrack = stream && stream.getVideoTracks().length > 0;
-  const showVideo = hasVideoTrack && videoOn;
-  const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const hasVideo = stream && stream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled);
+  const showVideo = hasVideo && videoOn;
+  const initials  = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <div className={`${styles.tile} ${small ? styles.small : ''}`} style={{ position: 'relative', overflow: 'hidden', background: '#1a1a2e', borderRadius: 12 }}>
-      {/* Always render video - show/hide via CSS */}
+    <div className={styles.tile} style={{ position: 'relative', overflow: 'hidden', background: '#1a1a2e', borderRadius: 12, minHeight: 0 }}>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        muted={muted || isLocal}
         style={{
           width: '100%', height: '100%',
           objectFit: 'cover',
           display: showVideo ? 'block' : 'none',
-          transform: isLocal ? 'scaleX(-1)' : 'none', // mirror local video
+          transform: isLocal ? 'scaleX(-1)' : 'none',
         }}
       />
 
-      {/* Avatar fallback when no video */}
       {!showVideo && (
         <div style={{
           width: '100%', height: '100%',
@@ -91,17 +83,27 @@ export default function VideoTile({
         </div>
       )}
 
-      {/* Name label */}
+      {/* Name + status label */}
       <div style={{
         position: 'absolute', bottom: 8, left: 10,
         display: 'flex', alignItems: 'center', gap: 5,
-        background: 'rgba(0,0,0,0.55)', borderRadius: 6,
+        background: 'rgba(0,0,0,0.6)', borderRadius: 6,
         padding: '2px 8px', fontSize: 12, color: 'white', fontWeight: 500,
+        maxWidth: 'calc(100% - 20px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
-        {!audioOn && <span>🔇</span>}
+        {!audioOn && <span title="Muted">🔇</span>}
         {handRaised && <span>✋</span>}
         <span>{name}{isLocal ? ' (you)' : ''}</span>
       </div>
+
+      {/* Red mute dot top-right */}
+      {!audioOn && (
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 8, height: 8, borderRadius: '50%',
+          background: '#ef4444', boxShadow: '0 0 6px #ef4444',
+        }} />
+      )}
     </div>
   );
 }

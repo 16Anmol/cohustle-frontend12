@@ -104,3 +104,52 @@
   transition: background 0.15s;
 }
 .reactionBtn:hover { background: var(--surface2); }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .bar {
+    padding: 0.5rem 0.6rem;
+    min-height: 58px;
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .left {
+    flex: 0;
+    min-width: 0;
+  }
+
+  .copyBtn {
+    font-size: 0;           /* hide text on mobile — show only icon */
+    padding: 0.5rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .copyBtn::before { content: '🔗'; font-size: 1rem; }
+
+  .center {
+    gap: 5px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .ctrl {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+
+  .right {
+    flex: 0;
+    gap: 4px;
+  }
+
+  .leaveBtn {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+  }
+}

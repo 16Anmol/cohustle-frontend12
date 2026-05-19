@@ -69,7 +69,12 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
   const createPC = useCallback((peerId, polite) => {
     if (pcsRef.current[peerId]) return pcsRef.current[peerId];
 
-    const pc = new RTCPeerConnection(iceConfigRef.current);
+    const pc = new RTCPeerConnection({
+      ...iceConfigRef.current,
+      bundlePolicy:     'max-bundle',   // bundle all media on one transport — reduces TURN relay load
+      rtcpMuxPolicy:    'require',      // mux RTCP with RTP — halves port usage
+      iceCandidatePoolSize: 10,
+    });
     pcsRef.current[peerId] = pc;
 
     // Add all local tracks
@@ -117,31 +122,42 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
 
     pc.oniceconnectionstatechange = () => {
       console.log(`[ICE] ${peerId} state: ${pc.iceConnectionState}`);
-      if (pc.iceConnectionState === 'failed') {
-        console.log(`[ICE] ${peerId} failed — attempting ICE restart`);
-        // Create new offer with iceRestart:true to restart ICE
-        if (pc.signalingState === 'stable') {
-          pc.createOffer({ iceRestart: true })
-            .then(offer => pc.setLocalDescription(offer))
-            .then(() => send({ type: 'offer', target: peerId, sdp: pc.localDescription }))
-            .catch(e => console.warn('[ICE restart] failed:', e));
-        }
-      }
       if (pc.iceConnectionState === 'disconnected') {
+        // Brief disconnect — wait and try ICE restart
         setTimeout(() => {
-          if (pc.iceConnectionState === 'disconnected' && pc.signalingState === 'stable') {
-            pc.createOffer({ iceRestart: true })
-              .then(offer => pc.setLocalDescription(offer))
-              .then(() => send({ type: 'offer', target: peerId, sdp: pc.localDescription }))
+          if (!pcsRef.current[peerId]) return; // already removed
+          const cur = pcsRef.current[peerId];
+          if (cur && cur.iceConnectionState !== 'connected' &&
+              cur.iceConnectionState !== 'completed' &&
+              cur.signalingState === 'stable') {
+            console.log(`[ICE] ${peerId} still disconnected — restarting`);
+            cur.createOffer({ iceRestart: true })
+              .then(o => cur.setLocalDescription(o))
+              .then(() => send({ type: 'offer', target: peerId, sdp: cur.localDescription }))
               .catch(() => {});
           }
-        }, 4000);
+        }, 3000);
       }
     };
 
     pc.onconnectionstatechange = () => {
       console.log(`[PC] ${peerId} connection: ${pc.connectionState}`);
-      if (pc.connectionState === 'failed') removePeer(peerId);
+      if (pc.connectionState === 'failed') {
+        // Try ICE restart before removing peer
+        if (pc.signalingState === 'stable') {
+          console.log(`[PC] ${peerId} connection failed — restarting ICE`);
+          pc.createOffer({ iceRestart: true })
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => send({ type: 'offer', target: peerId, sdp: pc.localDescription }))
+            .catch(() => {
+              // Only remove peer if restart fails
+              console.log(`[PC] ${peerId} ICE restart failed — removing peer`);
+              removePeer(peerId);
+            });
+        } else {
+          removePeer(peerId);
+        }
+      }
     };
 
     // Drain pending ICE candidates once remote description is set

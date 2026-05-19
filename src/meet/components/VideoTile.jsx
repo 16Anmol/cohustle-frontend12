@@ -5,6 +5,7 @@ export default function VideoTile({
   stream, name, muted = false,
   audioOn = true, videoOn = true,
   isLocal = false, handRaised = false,
+  isScreenShare = false,
 }) {
   const videoRef  = useRef(null);
   const [playing, setPlaying] = useState(false);
@@ -68,7 +69,7 @@ export default function VideoTile({
           width: '100%', height: '100%',
           objectFit: 'cover',
           display: showVideo ? 'block' : 'none',
-          transform: isLocal ? 'scaleX(-1)' : 'none',
+          transform: (isLocal && !isScreenShare) ? 'scaleX(-1)' : 'none',
         }}
       />
 

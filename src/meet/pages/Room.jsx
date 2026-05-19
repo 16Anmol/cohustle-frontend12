@@ -213,6 +213,7 @@ export default function Room() {
               videoOn={videoOn}
               isLocal
               handRaised={handRaised}
+              isScreenShare={screenSharing}
             />
             {peerList.map(([pid, peer]) => (
               <VideoTile

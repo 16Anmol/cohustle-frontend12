@@ -312,17 +312,10 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
     send({ type: 'media-state', screen: false });
   }, [send]);
 
-  // sendChat adds to local state AND sends to server so own messages appear instantly
+  // sendChat — server broadcasts to ALL including sender, so don't add locally
   const sendChat = useCallback((message) => {
     send({ type: 'chat', message });
-    // Add own message locally immediately (server broadcasts to others only)
-    onChatRef.current?.({
-      from:      myPeerIdRef.current,
-      name:      myName,
-      message,
-      timestamp: new Date().toISOString(),
-    });
-  }, [send, myName]);
+  }, [send]);
 
   const sendReaction  = useCallback((emoji)  => send({ type: 'reaction',   emoji }),        [send]);
   const sendRaiseHand = useCallback((raised)  => send({ type: 'raise-hand', raised }),       [send]);

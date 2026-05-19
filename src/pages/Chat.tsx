@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { useToast }    from "@/hooks/use-toast";
 import { io, Socket }  from "socket.io-client";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 

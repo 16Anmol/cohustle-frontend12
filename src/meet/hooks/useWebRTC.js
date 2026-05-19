@@ -118,13 +118,24 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
     pc.oniceconnectionstatechange = () => {
       console.log(`[ICE] ${peerId} state: ${pc.iceConnectionState}`);
       if (pc.iceConnectionState === 'failed') {
-        // Try ICE restart before giving up
-        pc.restartIce();
+        console.log(`[ICE] ${peerId} failed — attempting ICE restart`);
+        // Create new offer with iceRestart:true to restart ICE
+        if (pc.signalingState === 'stable') {
+          pc.createOffer({ iceRestart: true })
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => send({ type: 'offer', target: peerId, sdp: pc.localDescription }))
+            .catch(e => console.warn('[ICE restart] failed:', e));
+        }
       }
       if (pc.iceConnectionState === 'disconnected') {
         setTimeout(() => {
-          if (pc.iceConnectionState === 'disconnected') pc.restartIce();
-        }, 3000);
+          if (pc.iceConnectionState === 'disconnected' && pc.signalingState === 'stable') {
+            pc.createOffer({ iceRestart: true })
+              .then(offer => pc.setLocalDescription(offer))
+              .then(() => send({ type: 'offer', target: peerId, sdp: pc.localDescription }))
+              .catch(() => {});
+          }
+        }, 4000);
       }
     };
 
@@ -195,21 +206,32 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
       case 'peer_left': removePeer(msg.peer_id); break;
 
       case 'offer': {
-        // Reuse existing PC for renegotiation (screen share), create new for first offer
         const pc = pcsRef.current[msg.from] || createPC(msg.from, false);
-        await pc.setRemoteDescription(msg.sdp);
-        await drainCandidates(msg.from); // drain any ICE that arrived before SDP
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        send({ type: 'answer', target: msg.from, sdp: pc.localDescription });
+        // Glare handling: if we're already in have-local-offer, rollback first
+        if (pc.signalingState === 'have-local-offer') {
+          await pc.setLocalDescription({ type: 'rollback' });
+        }
+        // Only process if we're in a state that can accept an offer
+        if (pc.signalingState === 'stable' || pc.signalingState === 'have-remote-offer') {
+          await pc.setRemoteDescription(msg.sdp);
+          await drainCandidates(msg.from);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          send({ type: 'answer', target: msg.from, sdp: pc.localDescription });
+        }
         break;
       }
 
       case 'answer': {
         const pc = pcsRef.current[msg.from];
-        if (pc) {
-          await pc.setRemoteDescription(msg.sdp);
-          await drainCandidates(msg.from);
+        if (pc && pc.signalingState === 'have-local-offer') {
+          // Only accept answer when we actually sent an offer
+          try {
+            await pc.setRemoteDescription(msg.sdp);
+            await drainCandidates(msg.from);
+          } catch (e) {
+            console.warn('[WebRTC] setRemoteDescription(answer) failed:', pc.signalingState, e.message);
+          }
         }
         break;
       }

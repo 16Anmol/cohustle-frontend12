@@ -77,6 +77,15 @@ export const profileApi = {
     availability?: string; identityProof?: string; resumeLink?: string;
   }) =>
     request("/profile/freelancer", { method: "PATCH", body: JSON.stringify(data) }),
+
+  updateDocuments: (docs: {
+    identityProof?: string; companyDocument?: string;
+    pitchDeck?: string; resumeLink?: string;
+  }) =>
+    request("/profile/documents", { method: "PATCH", body: JSON.stringify(docs) }),
+
+  getTurnCredentials: () =>
+    request<{ iceServers: any[] }>("/profile/turn-credentials"),
 };
 
 // ── Problems ───────────────────────────────────────────────────────────────────

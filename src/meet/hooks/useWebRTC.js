@@ -95,6 +95,8 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
     // ── ontrack: add each incoming track to the stable stream ────────────────
     pc.ontrack = (e) => {
       if (!e.track) return;
+      console.log(`[ontrack] ${peerId} got ${e.track.kind} track, readyState: ${e.track.readyState}`);
+
       const rs = remoteStreams.current[peerId];
 
       // Replace any existing track of the same kind
@@ -103,13 +105,19 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
         .forEach(t => rs.removeTrack(t));
       rs.addTrack(e.track);
 
-      // Force peer state update so React re-renders the video element
-      updatePeer(peerId, { stream: rs, _t: Date.now() });
+      // Create a NEW MediaStream object to force React/VideoTile to re-assign srcObject
+      const freshStream = new MediaStream(rs.getTracks());
+      remoteStreams.current[peerId] = freshStream;
+      updatePeer(peerId, { stream: freshStream, _t: Date.now() });
 
-      e.track.onunmute = () => updatePeer(peerId, { stream: rs, _t: Date.now() });
+      // Re-trigger update when track becomes active (unmuted)
+      e.track.onunmute = () => {
+        console.log(`[ontrack] ${peerId} ${e.track.kind} unmuted`);
+        updatePeer(peerId, { stream: remoteStreams.current[peerId], _t: Date.now() });
+      };
       e.track.onended = () => {
-        rs.removeTrack(e.track);
-        updatePeer(peerId, { stream: rs, _t: Date.now() });
+        remoteStreams.current[peerId]?.removeTrack(e.track);
+        updatePeer(peerId, { stream: remoteStreams.current[peerId], _t: Date.now() });
       };
     };
 

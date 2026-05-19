@@ -19,27 +19,33 @@ export default function VideoTile({
       return;
     }
 
-    // Always assign fresh — don't diff, just set
+    // Always assign fresh srcObject — forces browser to re-attach tracks
     video.srcObject = stream;
-    video.muted = muted || isLocal; // local + muted props control muting, NOT autoplay hack
+    video.muted = muted || isLocal;
 
-    video.play().then(() => setPlaying(true)).catch(() => {
-      // Autoplay policy: must be muted to autoplay. For remote peers this
-      // is a browser restriction — we handle it by starting muted then
-      // unlocking audio on first user gesture.
-      video.muted = true;
+    const tryPlay = () => {
       video.play()
         .then(() => {
           setPlaying(true);
-          // For remote peers: unmute immediately after play starts.
-          // This works because the user already interacted (clicked "Join").
-          if (!isLocal && !muted) {
-            video.muted = false;
-          }
+          // Unmute remote video after play succeeds
+          if (!isLocal && !muted) video.muted = false;
         })
-        .catch(e => console.warn('[VideoTile] play failed:', e));
-    });
-  }, [stream]); // re-run whenever stream reference changes
+        .catch(() => {
+          // Browser blocked autoplay — play muted first
+          video.muted = true;
+          video.play()
+            .then(() => {
+              setPlaying(true);
+              if (!isLocal && !muted) video.muted = false;
+            })
+            .catch(e => console.warn('[VideoTile] play failed:', e));
+        });
+    };
+
+    // Small delay lets the stream stabilise before playing
+    const t = setTimeout(tryPlay, 80);
+    return () => clearTimeout(t);
+  }, [stream]); // new stream object = re-run = re-attach srcObject
 
   // Sync muted prop changes (e.g. user mutes/unmutes)
   useEffect(() => {

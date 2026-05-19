@@ -1,37 +1,23 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { profileApi } from '@/lib/api';
 
-// ── ICE config: STUN + free public TURN servers ───────────────────────────────
-// TURN is essential for different-network calls. Without it, WebRTC fails
-// whenever both peers are behind symmetric NAT (most mobile carriers + corp wifi).
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    // Free TURN servers from Open Relay Project — handles cross-network traffic
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turns:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
-  iceCandidatePoolSize: 10,
-};
+// Fallback ICE config if backend fetch fails
+const FALLBACK_ICE = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+
+// Fetch TURN credentials from our backend (stored securely in env vars)
+async function getIceConfig() {
+  try {
+    const { iceServers } = await profileApi.getTurnCredentials();
+    console.log('[WebRTC] ICE servers loaded from backend:', iceServers.length);
+    return { iceServers, iceCandidatePoolSize: 10 };
+  } catch (e) {
+    console.warn('[WebRTC] Could not fetch TURN credentials, using STUN only:', e);
+    return { iceServers: FALLBACK_ICE, iceCandidatePoolSize: 4 };
+  }
+}
 
 export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
   const [peers,          setPeers]          = useState({});
@@ -47,6 +33,7 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
   const origCamTrackRef   = useRef(null);
   const pendingCandidates = useRef({});   // peer_id → [ICE candidates before remoteDesc is set]
   const remoteStreams      = useRef({});   // peer_id → MediaStream — kept alive across renders
+  const iceConfigRef      = useRef({ iceServers: FALLBACK_ICE, iceCandidatePoolSize: 4 });
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -82,7 +69,7 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
   const createPC = useCallback((peerId, polite) => {
     if (pcsRef.current[peerId]) return pcsRef.current[peerId];
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(iceConfigRef.current);
     pcsRef.current[peerId] = pc;
 
     // Add all local tracks
@@ -261,8 +248,11 @@ export function useWebRTC({ roomId, myName, onChat, onReaction, onRaiseHand }) {
 
   // ── connect WebSocket ──────────────────────────────────────────────────────
 
-  const connect = useCallback((stream) => {
+  const connect = useCallback(async (stream) => {
     if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) return;
+
+    // Fetch TURN credentials before creating any peer connections
+    iceConfigRef.current = await getIceConfig();
 
     localStreamRef.current = stream;
     const WS_URL = import.meta.env.VITE_WEBRTC_WS_URL || `ws://${window.location.hostname}:8765`;

@@ -41,8 +41,8 @@ export const Problems = () => {
           <Btn variant="primary" onClick={load}>Search</Btn>
         </div>
       </SectionHeader>
-      <FilterPills value={status} onChange={setStatus}
-        options={[{label:"All",value:""},{label:"Open",value:"open"},{label:"In Progress",value:"in_progress"},{label:"Closed",value:"closed"}]} />
+      {/* <FilterPills value={status} onChange={setStatus}
+        options={[{label:"All",value:""},{label:"Open",value:"open"},{label:"In Progress",value:"in_progress"},{label:"Closed",value:"closed"}]} /> */}
       <div className="mt-5 space-y-2">
         {loading ? <Spinner /> : items.length === 0 ? <Empty icon={FileText} text="No problems found." /> : items.map(p => (
           <ACard key={p._id} className="px-5 py-4 flex items-start justify-between gap-3 flex-wrap">

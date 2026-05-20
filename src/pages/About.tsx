@@ -1,6 +1,8 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+
 import { Users, Target, Handshake, Zap, Globe, Shield, ArrowRight, Star } from "lucide-react";
+
 
 const values = [
   {
@@ -79,7 +81,7 @@ const About = () => {
 
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <a
-                href="/apply"
+                href="/"
                 className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90"
               >
                 Join the community <ArrowRight className="h-4 w-4" />
@@ -183,7 +185,7 @@ const About = () => {
             Join thousands of builders already collaborating on Co Hustle.
           </p>
           <a
-            href="/apply"
+            href="/explore"
             className="relative mt-8 inline-flex items-center gap-2 rounded-full bg-background px-8 py-3.5 text-sm font-semibold text-foreground shadow-lg transition-all hover:opacity-90"
           >
             Get started for free <ArrowRight className="h-4 w-4" />

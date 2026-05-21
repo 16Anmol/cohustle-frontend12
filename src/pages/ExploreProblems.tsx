@@ -405,7 +405,7 @@ const ExploreProblems = () => {
               <button className="text-primary underline" onClick={() => navigate("/")}>Sign in</button> to apply
             </p>
           ) : isStartupUser ? (
-            <p className="text-sm text-muted-foreground italic">Startups cannot apply to problems.</p>
+            <p className="text-sm text-muted-foreground italic">Startups cannot apply to Tasks.</p>
           ) : applied ? (
             <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
               <span className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center text-xs">✓</span>
@@ -413,7 +413,7 @@ const ExploreProblems = () => {
             </div>
           ) : (
             <Button className="w-full" size="lg" onClick={() => setApplyTarget(p)}>
-              <Send size={15} className="mr-2" /> Apply for this Problem
+              <Send size={15} className="mr-2" /> Apply for this Task
             </Button>
           )}
         </div>

@@ -6,12 +6,12 @@ import {
   Search, MessageCircle, User, Bell, Loader2,
   ExternalLink, Clock, Users, Star, Github, Linkedin,
   CheckCircle2, ChevronRight, FileText, BookOpen,
-  Zap, ArrowUpRight, Trophy, ShieldOff
+  Zap, ArrowUpRight, Trophy, ShieldOff, Video, Calendar
 } from "lucide-react";
 import Navbar      from "@/components/Navbar";
 import ApplyDialog from "@/components/ApplyDialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { problemsApi, applicationsApi, type Problem, type Application } from "@/lib/api";
+import { problemsApi, applicationsApi, messagesApi, type Problem, type Application } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { SuspendedTopBanner } from "@/components/SuspendedBanner";
 import { io, Socket } from "socket.io-client";
@@ -54,6 +54,8 @@ const FreelancerDashboard = () => {
   const [searchParams]  = useSearchParams();
   const defaultTab      = searchParams.get("tab") || "browse";
   const { user, profile } = useAuth();
+  const [meetings,    setMeetings]    = useState<any[]>([]);
+  const [loadingMeet, setLoadingMeet] = useState(true);
   const { toast }       = useToast();
 
   const [problems,      setProblems]      = useState<Problem[]>([]);
@@ -87,6 +89,11 @@ const FreelancerDashboard = () => {
     socket.on("problem:new", (p: any) => { setProblems(prev => [p, ...prev]); toast({ title: "New task posted!", description: p.title }); });
     socket.on("application:status", (d: any) => setApplications(prev => prev.map(a => a._id === d.applicationId ? {...a, status: d.status} : a)));
     socket.on("notification", (n: any) => setNotifications(prev => [{ id: Date.now().toString(), ...n }, ...prev]));
+    messagesApi.getMyMeetings()
+      .then(({ meetings: m }) => setMeetings(m))
+      .catch(() => {})
+      .finally(() => setLoadingMeet(false));
+
     return () => { socket.disconnect(); };
   }, [user]);
 

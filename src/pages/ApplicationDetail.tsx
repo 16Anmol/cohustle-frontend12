@@ -200,17 +200,7 @@ const ApplicationDetail = () => {
           </Card>
         )}
 
-        {/* Cover note */}
-        <Card className="mb-5">
-          <CardContent className="p-6">
-            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-              <FileText size={15} className="text-primary" /> Cover Note
-            </h2>
-            <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
-              {app.coverNote || <span className="text-muted-foreground italic">No cover note provided.</span>}
-            </p>
-          </CardContent>
-        </Card>
+
 
         {/* Skills */}
         {app.skills && app.skills.length > 0 && (

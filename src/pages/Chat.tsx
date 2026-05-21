@@ -966,8 +966,8 @@ const Chat = () => {
   const upcomingMeeting = (selected && meetings.length > 0)
     ? meetings.find(m => {
         const ms      = msUntilMeeting(m);
-        const isLive  = ms <= 0 && ms > -3600000;      // started, < 1hr ago
-        const isSoon  = ms > 0  && ms <= 30 * 60000;   // < 30min away
+        const isLive  = ms <= 0 && ms > -7200000;       // live: started within last 2hrs
+        const isSoon  = ms > 0  && ms <= 4 * 3600000;   // soon: within next 4 hours
         return (isLive || isSoon) && !dismissedReminders.has(m.roomId) && !endedMeetings.has(m.roomId);
       })
     : undefined;
@@ -1013,7 +1013,14 @@ const Chat = () => {
                     const otherId  = getUserId(other);
                     const isOnline = otherId ? onlineUsers.has(otherId) : false;
                     const isActive = selected?._id === c._id;
-                    const convoMeetings: any[] = [];
+
+                    // Meeting dot — computed by backend in meetingStatus field
+                    const meetingStatus = (c as any).meetingStatus as "live" | "soon" | "scheduled" | null;
+                    const meetingDot = meetingStatus === "live"      ? "green"
+                                     : meetingStatus === "soon"      ? "yellow"
+                                     : meetingStatus === "scheduled" ? "blue"
+                                     : null;
+                    const nearestMeeting = ((c as any).meetings || []).find((m: any) => m.status !== "ended");
 
                     return (
                       <button
@@ -1023,8 +1030,17 @@ const Chat = () => {
                       >
                         <div className="relative flex-shrink-0">
                           <Avatar user={other} />
-                          {isOnline && (
+                          {isOnline && !meetingDot && (
                             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background" />
+                          )}
+                          {meetingDot === "green" && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background animate-pulse" title="Meeting is live now!" />
+                          )}
+                          {meetingDot === "yellow" && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-yellow-400 ring-2 ring-background" title="Meeting within 5 hours" />
+                          )}
+                          {meetingDot === "blue" && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-blue-400 ring-2 ring-background" title="Meeting scheduled" />
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1043,7 +1059,13 @@ const Chat = () => {
                           </div>
                           <div className="flex items-center justify-between mt-0.5">
                             <p className={`text-xs truncate ${(c.unreadCount || 0) > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                              {c.lastMessage || "Start the conversation"}
+                              {meetingDot === "green"
+                                ? "🟢 Meeting is live now"
+                                : meetingDot === "yellow"
+                                ? `🟡 Meeting at ${nearestMeeting?.timeSlot}`
+                                : meetingDot === "blue"
+                                ? `🔵 Meeting on ${nearestMeeting?.date}`
+                                : c.lastMessage || "Start the conversation"}
                             </p>
                             {(c.unreadCount || 0) > 0 && (
                               <span className="ml-1 flex-shrink-0 h-4 w-4 rounded-full bg-primary flex items-center justify-center text-[9px] text-primary-foreground font-bold">

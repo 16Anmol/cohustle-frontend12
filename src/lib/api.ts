@@ -121,6 +121,9 @@ export const problemsApi = {
   updateStatus: (id: string, status: string) =>
     request(`/problems/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
 
+  delete: (id: string) =>
+    request(`/problems/${id}`, { method: "DELETE" }),
+
   apply: (id: string, proposal: {
     coverNote: string;
     skills?: string[];
@@ -189,6 +192,9 @@ export const messagesApi = {
     request(`/messages/conversations/${conversationId}/meetings/${roomId}/end`, { method: "PATCH" }),
   endMeetingByRoomId: (roomId: string) =>
     request(`/messages/meetings/${roomId}/end`, { method: "PATCH" }),
+
+  getMyMeetings: () =>
+    request<{ meetings: any[] }>("/messages/my-meetings"),
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -222,6 +228,8 @@ export interface StartupProfile {
 }
 
 export interface FreelancerProfile {
+  linkedinLink: string;
+  githubLink: string;
   _id: string;
   skills: string[];
   experience?: string;
@@ -468,6 +476,9 @@ export const collabApi = {
   getMine: () => request<{ requests: CollabRequest[] }>("/collab-requests/mine"),
 
   delete: (id: string) => request(`/collab-requests/${id}`, { method: "DELETE" }),
+
+  close:   (id: string) => request(`/collab-requests/${id}/close`,  { method: "PATCH" }),
+  reopen:  (id: string) => request(`/collab-requests/${id}/reopen`, { method: "PATCH" }),
 };
 
 // ── User Actions: Report + Block ───────────────────────────────────────────────

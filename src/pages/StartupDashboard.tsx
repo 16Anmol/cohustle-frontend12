@@ -14,7 +14,7 @@ import {
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  problemsApi, applicationsApi, collabApi,
+  problemsApi, applicationsApi, collabApi, messagesApi,
   type Problem, type Application, type CollabRequest
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -162,6 +162,12 @@ const StartupDashboard = () => {
   const [loadingProbs,  setLoadingProbs]  = useState(true);
   const [loadingApps,   setLoadingApps]   = useState(true);
   const [loadingCollab, setLoadingCollab] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string; message: string; onConfirm: () => void;
+  } | null>(null);
+  const [undoStack,     setUndoStack]     = useState<{
+    label: string; undo: () => void;
+  } | null>(null);
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activeTab,     setActiveTab]     = useState(defaultTab);
@@ -186,6 +192,7 @@ const StartupDashboard = () => {
       .then(({ requests }) => setCollabs(requests))
       .catch(() => {})
       .finally(() => setLoadingCollab(false));
+
   }, []);
 
   useEffect(() => {
@@ -210,6 +217,83 @@ const StartupDashboard = () => {
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally { setUpdatingId(null); }
+  };
+
+  const deleteTask = (id: string) => {
+    const task = problems.find(p => p._id === id);
+    if (!task) return;
+    setConfirmDialog({
+      title: "Delete Task?",
+      message: `"${task.title}" will be permanently deleted and removed from explore.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await problemsApi.delete(id);
+          setProblems(prev => prev.filter(p => p._id !== id));
+          toast({ title: "Task deleted" });
+          // Undo: re-create is not possible for delete — just show message
+          setUndoStack({ label: "Task deleted", undo: () => {
+            toast({ title: "Cannot undo delete — task is permanently removed" });
+          }});
+          setTimeout(() => setUndoStack(null), 5000);
+        } catch (e: any) { toast({ title: "Error", description: (e as any).message, variant: "destructive" }); }
+      },
+    });
+  };
+
+  const finishTask = (id: string) => {
+    const task = problems.find(p => p._id === id);
+    if (!task) return;
+    setConfirmDialog({
+      title: "Finish Task?",
+      message: `"${task.title}" will be marked as closed and removed from explore. You can reopen it anytime.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await problemsApi.updateStatus(id, "closed");
+          setProblems(prev => prev.map(p => p._id === id ? { ...p, status: "closed" } : p));
+          toast({ title: "Task finished — removed from explore" });
+          setUndoStack({
+            label: "Task closed",
+            undo: async () => {
+              await problemsApi.updateStatus(id, "open");
+              setProblems(prev => prev.map(p => p._id === id ? { ...p, status: "open" } : p));
+              toast({ title: "Task reopened ✓" });
+              setUndoStack(null);
+            },
+          });
+          setTimeout(() => setUndoStack(null), 5000);
+        } catch (e: any) { toast({ title: "Error", description: (e as any).message, variant: "destructive" }); }
+      },
+    });
+  };
+
+  const closeCollab = (id: string) => {
+    const col = collabs.find(c => c._id === id);
+    if (!col) return;
+    setConfirmDialog({
+      title: "Finish Collab?",
+      message: `"${col.title}" will be marked as closed and removed from explore. You can undo this.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await collabApi.close(id);
+          setCollabs(prev => prev.map(c => c._id === id ? { ...c, status: "closed" } : c));
+          toast({ title: "Collab closed — removed from explore" });
+          setUndoStack({
+            label: "Collab closed",
+            undo: async () => {
+              // Reopen by patching back to open (add reopen endpoint or patch)
+              await collabApi.reopen(id);
+              setCollabs(prev => prev.map(c => c._id === id ? { ...c, status: "open" } : c));
+              toast({ title: "Collab reopened ✓" });
+              setUndoStack(null);
+            },
+          });
+          setTimeout(() => setUndoStack(null), 5000);
+        } catch (e: any) { toast({ title: "Error", description: (e as any).message, variant: "destructive" }); }
+      },
+    });
   };
 
   const deleteCollab = async (id: string) => {
@@ -248,6 +332,40 @@ const StartupDashboard = () => {
   return (
     <div className="min-h-screen" style={{ background: "linear-gradient(135deg, #faf5ff 0%, #f3f0ff 60%, #fdf4ff 100%)" }}>
       <Navbar />
+
+      {/* ── Confirm Dialog ── */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setConfirmDialog(null)}>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDialog(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={confirmDialog.onConfirm}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Undo Toast ── */}
+      {undoStack && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 animate-in slide-in-from-bottom-4">
+          <span className="text-sm font-medium">{undoStack.label}</span>
+          <button onClick={undoStack.undo}
+            className="text-sm font-bold text-yellow-400 hover:text-yellow-300 transition-colors px-2 py-0.5 rounded-lg hover:bg-white/10">
+            Undo
+          </button>
+          <button onClick={() => setUndoStack(null)} className="text-gray-400 hover:text-white ml-1">
+            <X size={14}/>
+          </button>
+        </div>
+      )}
 
       {/* ── Suspension banner ── */}
       {user?.suspended && (
@@ -457,6 +575,18 @@ const StartupDashboard = () => {
                         <span>{timeAgo(p.createdAt)}</span>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {p.status !== "closed" && (
+                        <button onClick={() => finishTask(p._id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-bold hover:bg-green-100 transition-colors">
+                          <CheckCircle2 size={12}/> Finish
+                        </button>
+                      )}
+                      <button onClick={() => deleteTask(p._id)}
+                        className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                        <Trash2 size={14}/>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -490,6 +620,12 @@ const StartupDashboard = () => {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-green-500 hover:bg-green-800 text-white text-xs font-bold transition-colors">
                         <Handshake size={12}/> View Pitches
                       </button>
+                      {col.status === "open" && (
+                        <button onClick={() => closeCollab(col._id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-100 transition-colors">
+                          <CheckCircle2 size={12}/> Finish
+                        </button>
+                      )}
                       <button onClick={() => deleteCollab(col._id)}
                         className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                         <Trash2 size={14}/>
@@ -501,7 +637,6 @@ const StartupDashboard = () => {
             </div>
           );
         })()}
-
         {/* TAB 2 — APPLICATIONS
             Shows ONLY task cards with applicant count.
             "View Applications" → opens full grid page for that task.
